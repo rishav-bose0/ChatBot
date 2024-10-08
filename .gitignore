@@ -3,3 +3,7 @@ data
 dbstore
 venv
 .idea
+slack.py
+lanf-test.ipynb
+lang.ipynb
+test_bot.py
