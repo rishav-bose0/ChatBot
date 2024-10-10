@@ -5,7 +5,7 @@ from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_text_splitters import CharacterTextSplitter, RecursiveCharacterTextSplitter
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
-
+from constants import prompts, constants
 from chat import GptLLM
 from file_process import FileUtils
 from langchain_openai import OpenAIEmbeddings
@@ -20,12 +20,11 @@ class Core:
         self.vectorstore = None
         self.prompt = hub.pull("rlm/rag-prompt")
         self.file_utils = FileUtils()
-        self.embedder = OpenAIEmbeddings(api_key="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")
+        self.embedder = OpenAIEmbeddings()
         self.llm = GptLLM().get_llm()
         self.text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
             encoding_name="cl100k_base", chunk_size=256, chunk_overlap=0
         )
-        # self.chroma = Chroma()
         self.ragchain = None
         self.store = {}
 
@@ -89,14 +88,21 @@ class Core:
         self.vectorstore.add_texts(texts=token_text)
 
     def _get_retriever(self):
+        """
+        Function initialises the vectorstore with the retriever if vectorstore is not initialised. Else returns the retriever.
+        :return:
+        """
         if self.vectorstore is None:
             self.vectorstore = Chroma(persist_directory="dbstore", embedding_function=self.embedder)
 
         retriever = self.vectorstore.as_retriever(search_kwargs={"k": 6})
         return retriever
 
-    def _retrieve_documents(self):
-        # vectordb = Chroma(persist_directory="dbstore", embedding_function=self.embedder)
+    def _create_rag_chain(self):
+        """
+        Function creates a basic ragchain for retrieval of documents, passing to prompt and then to LLM.
+        :return:
+        """
         retriever = self._get_retriever()
         self.rag_chain = (
                 {"context": retriever | self.file_utils.format_docs, "question": RunnablePassthrough()}
@@ -105,64 +111,51 @@ class Core:
                 | StrOutputParser()
         )
 
-        # return rag_chain
-
     def chat_with_knowledge_base(self, question):
-        self._retrieve_documents()
+        """
+        Function uses retrievers and langchain to understand the question, retrieve relevant documents and pass the
+        information to LLM to return the response.
+        :param question:
+        :return:
+        """
+        self._create_rag_chain()
         for chunk in self.rag_chain.stream(question):
-            print(chunk, end="", flush=True)
+            yield chunk
 
-    def get_session_history(self, session_id: str) -> BaseChatMessageHistory:
+    def get_session_history(self, session_id) -> BaseChatMessageHistory:
         if session_id not in self.store:
             self.store[session_id] = ChatMessageHistory()
         return self.store[session_id]
 
     def chat_with_history(self, question):
-        contextualize_q_system_prompt = """Given a chat history and the latest user question \
-        which might reference context in the chat history, formulate a standalone question \
-        which can be understood without the chat history. Do NOT answer the question, \
-        just reformulate it if needed and otherwise return it as is."""
+        """
+        Function uses retrievers and langchain to understand the question, retrieve relevant documents and pass the
+        information to LLM to return the response. It tries to understand the question wrt the conversation history.
+        :param question:
+        :return: streaming response from LLM.
+        """
+
         contextualize_q_prompt = ChatPromptTemplate.from_messages(
             [
-                ("system", contextualize_q_system_prompt),
+                (constants.SYSTEM_MESSAGE, prompts.CONTEXTUALISE_QUESTION_SYSTEM_PROMPT),
                 MessagesPlaceholder("chat_history"),
-                ("human", "{input}"),
+                (constants.HUMAN_MESSAGE, "{input}"),
             ]
         )
-        history_aware_retriever = create_history_aware_retriever(
+        history_aware_retriever_chain = create_history_aware_retriever(
             self.llm, self._get_retriever(), contextualize_q_prompt
         )
 
-        # qa_system_prompt = """You are an assistant for question-answering tasks.
-        # Use the following pieces of retrieved context to answer the question. If you don't know the answer,
-        # just say that you don't know. Try to answer in detail in not less than 100 words.
-        # \nQuestion: {question} \nContext: {context} \nAnswer:"""
-
-        qa_system_prompt = """You are an assistant for question-answering tasks. \
-        Use the following pieces of retrieved context to answer the question. \
-        If you don't know the answer, just say that you don't know. \
-        Use three sentences maximum and keep the answer concise.\
-
-        {context}"""
-
         qa_prompt = ChatPromptTemplate.from_messages(
             [
-                ("system", qa_system_prompt),
+                (constants.SYSTEM_MESSAGE, prompts.QA_SYSTEM_PROMPT),
                 MessagesPlaceholder("chat_history"),
-                ("human", "{input}"),
+                (constants.HUMAN_MESSAGE, "{input}"),
             ]
         )
 
-        # rag_chain = (
-        #         {"context": history_aware_retriever | self.file_utils.format_docs, "input": RunnablePassthrough(),
-        #          "chat_history": self.get_session_history}
-        #         | qa_prompt
-        #         | self.llm
-        #         | StrOutputParser()
-        # )
-
         question_answer_chain = create_stuff_documents_chain(self.llm, qa_prompt)
-        rag_chain = create_retrieval_chain(history_aware_retriever, question_answer_chain)
+        rag_chain = create_retrieval_chain(history_aware_retriever_chain, question_answer_chain)
 
         conversational_rag_chain = RunnableWithMessageHistory(
             rag_chain,
@@ -174,4 +167,4 @@ class Core:
 
         for chunk in conversational_rag_chain.stream({"input": question},
                                                      config={"configurable": {"session_id": "abc123"}}):
-            print(chunk, end="", flush=True)
+            yield chunk.get('answer', "")

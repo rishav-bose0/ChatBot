@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Interface</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        /* Custom Styles */
+        body, html {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            height: 90vh;
+            max-width: 800px;
+            margin: 20px auto;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .chat-header {
+            background-color: #007bff;
+            color: white;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+            background-color: #f8f9fa;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            display: flex;
+        }
+
+        .message.user .message-content {
+            margin-left: auto;
+            background-color: #007bff;
+            color: white;
+            border-radius: 15px 15px 0 15px;
+            padding: 10px 15px;
+            max-width: 70%;
+            word-wrap: break-word;
+        }
+
+        .message.assistant .message-content {
+            margin-right: auto;
+            background-color: #e2e3e5;
+            color: black;
+            border-radius: 15px 15px 15px 0;
+            padding: 10px 15px;
+            max-width: 70%;
+            word-wrap: break-word;
+        }
+
+        .chat-input {
+            padding: 15px;
+            background-color: #ffffff;
+            border-top: 1px solid #ddd;
+        }
+
+        .chat-input form {
+            display: flex;
+        }
+
+        .chat-input input[type="text"] {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            margin-right: 10px;
+            outline: none;
+        }
+
+        .chat-input button {
+            padding: 10px 20px;
+            border: none;
+            background-color: #007bff;
+            color: white;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .chat-input button:hover {
+            background-color: #0056b3;
+        }
+
+        .typing-indicator {
+            font-style: italic;
+            color: #555;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="#">My Chat Application</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+                aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="upload">Upload More Info</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link active" aria-current="page" href="chat">Chat with Bot</a>
+                </li>
+                <li class="nav-item">
+                    <button class="btn btn-outline-light ms-3" id="clearChatBtn">Clear Chat</button>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<!-- Chat Interface -->
+<div class="chat-container">
+    <!-- Chat Header -->
+    <div class="chat-header">
+        <h3>Chat Interface</h3>
+    </div>
+
+    <!-- Chat Messages -->
+    <div class="chat-messages" id="chatMessages">
+        <!-- Messages will be appended here -->
+    </div>
+
+    <!-- Chat Input -->
+    <div class="chat-input">
+        <form id="chatForm">
+            <input type="text" id="userInput" placeholder="Type your message here..." autocomplete="off" required>
+            <button type="submit">Send</button>
+        </form>
+    </div>
+</div>
+
+<!-- Bootstrap JS (Optional, for enhanced interactivity) -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<!-- Custom JavaScript -->
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const chatForm = document.getElementById('chatForm');
+        const userInput = document.getElementById('userInput');
+        const chatMessages = document.getElementById('chatMessages');
+
+        // Function to append messages to the chat
+        const appendMessage = (message, sender) => {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message', sender);
+
+            const messageContent = document.createElement('div');
+            messageContent.classList.add('message-content');
+            messageContent.textContent = message;
+
+            messageDiv.appendChild(messageContent);
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        };
+
+        const clearChatBtn = document.getElementById('clearChatBtn');
+
+        clearChatBtn.addEventListener('click', () => {
+            if (confirm('Are you sure you want to clear the chat history?')) {
+                localStorage.removeItem('chatHistory');
+                chatMessages.innerHTML = '';
+            }
+        });
+
+        // Function to load chat history from localStorage
+        const loadChatHistory = () => {
+            const history = JSON.parse(localStorage.getItem('chatHistory')) || [];
+            history.forEach(msg => {
+                appendMessage(msg.message, msg.sender);
+            });
+        };
+
+        // Function to save message to localStorage
+        const saveMessage = (message, sender) => {
+            const history = JSON.parse(localStorage.getItem('chatHistory')) || [];
+            history.push({message, sender});
+            localStorage.setItem('chatHistory', JSON.stringify(history));
+        };
+
+        // Load existing chat history on page load
+        loadChatHistory();
+
+        // Handle form submission
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const message = userInput.value.trim();
+            if (message === "") return;
+
+            // Append user message
+            appendMessage(message, 'user');
+            saveMessage(message, 'user');
+
+            // Clear input
+            userInput.value = '';
+
+            // Append typing indicator
+            const typingIndicator = document.createElement('div');
+            typingIndicator.classList.add('typing-indicator', 'message', 'assistant');
+            typingIndicator.textContent = 'Assistant is typing...';
+            chatMessages.appendChild(typingIndicator);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            try {
+                // Send the message to the backend
+                const response = await fetch(' http://127.0.0.1:8000/chatwithme', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({question: message})
+                });
+
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let assistantMessage = '';
+
+                // Read the streaming response
+                while (true) {
+                    const {done, value} = await reader.read();
+                    if (done) break;
+                    const chunk = decoder.decode(value, {stream: true});
+                    assistantMessage += chunk;
+                    // Update the typing indicator with the latest chunk
+                    typingIndicator.textContent = assistantMessage;
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                }
+
+                // Remove typing indicator
+                chatMessages.removeChild(typingIndicator);
+
+                // Append assistant message
+                appendMessage(assistantMessage, 'assistant');
+                saveMessage(assistantMessage, 'assistant');
+
+            } catch (error) {
+                console.error('Error:', error);
+                typingIndicator.textContent = 'Error: Unable to fetch response.';
+            }
+        });
+    });
+</script>
+</body>
+</html>

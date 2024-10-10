@@ -11,5 +11,9 @@ class Service:
         return self.core.extract_documents(documents)
 
     def chat_with_knowledge_base(self, question):
-        # return self.core.chat_with_knowledge_base(question)
+        """
+        Function sends the questions to the core component where all the handling takes place.
+        :param question:
+        :return: streaming response from LLM.
+        """
         return self.core.chat_with_history(question)

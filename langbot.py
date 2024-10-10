@@ -15,7 +15,6 @@ from langchain_core.output_parsers import StrOutputParser
 # from langchain_openai import ChatOpenAI
 #
 # # os.environ["OPENAI_API_KEY"] = getpass.getpass()
-# os.environ["OPENAI_API_KEY"] = "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"
 #
 # llm = ChatOpenAI(model="gpt-4o-mini")
 #
