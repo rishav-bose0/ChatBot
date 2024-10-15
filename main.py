@@ -1,6 +1,13 @@
+import shutil
+import tempfile
+import os
+from typing import Optional
+
 import uvicorn
-from fastapi import FastAPI, UploadFile, Request
+from fastapi import FastAPI, UploadFile, Request, Form
 from fastapi.responses import StreamingResponse, FileResponse
+
+from dto.website_detail import WebsiteDetails
 from service import Service
 
 app = FastAPI()
@@ -24,9 +31,22 @@ async def root():
 
 
 @app.post("/uploadfile/")
-def create_upload_file(files: list[UploadFile]):
-    service.extract_documents()
-    return {"filenames": [file.filename for file in files]}
+def create_upload_file(files: list[UploadFile], websites: Optional[str] = Form(None),
+                       recursive: Optional[bool] = Form(False)):
+    temp_dir = "/tmp/"
+    saved_files = []
+    websites_list = []
+    for file in files:
+        file_path = os.path.join(temp_dir, file.filename)
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        saved_files.append(file_path)
+
+    if len(websites.strip(" ")) != 0:
+        websites_list = websites.split("\r\n")
+    website_details = WebsiteDetails(websites=websites_list, is_recursive=recursive)
+    service.extract_documents(saved_files, website_details)
+    # return {"filenames": [file.filename for file in files]}
 
 
 @app.post("/chatwithme/")

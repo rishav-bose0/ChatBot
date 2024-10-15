@@ -37,17 +37,14 @@ class FileUtils:
         Categorize extracted elements from a PDF into tables and texts.
         raw_pdf_elements: List of unstructured.documents.elements
         """
-        tables = []
+        # tables = []
         texts = []
         for element in raw_pdf_elements:
+            # Uncomment this if only want tabular info from the pdf.
             # if "unstructured.documents.elements.Table" in str(type(element)):
             #     tables.append(str(element))
-            # # TODO Check this, this is wrong always.
-            # # elif "unstructured.documents.elements.CompositeElement" in str(type(element)):
-            # else:
             texts.append(str(element))
         return texts
-        # return texts, tables
 
     # def format_docs(self, docs, max_tokens=120000, encoding_name="cl100k_base"):
     #     encoding = get_encoding(encoding_name)
@@ -65,34 +62,3 @@ class FileUtils:
 
     def format_docs(self, docs):
         return "\n\n".join(doc.page_content for doc in docs)
-
-# The following is for large documents
-# import time
-#
-# embedder = OpenAIEmbeddings()
-# # vectorstore = Chroma(embedding_function=embedder)
-# # Define Batch Size (Adjust based on your rate limits)
-# BATCH_SIZE = 200  # Number of documents per batch
-#
-#
-# # Split documents into batches
-# def chunk_documents(docs, batch_size):
-#     for i in range(0, len(docs), batch_size):
-#         yield docs[i:i + batch_size]
-#
-#
-# # Function to embed and add to vector store
-# def embed_and_store(docs_batch):
-#     try:
-#         # embeddings = embedder.embed_documents([doc.page_content for doc in docs_batch])
-#         vectorstore.add_documents(docs_batch)
-#     except Exception as e:
-#         print(f"Error embedding batch: {e}")
-#         time.sleep(5)  # Wait before retrying
-#         embed_and_store(docs_batch)  # Retry
-#
-#
-# # Process all documents in batches
-# for batch in chunk_documents(docs_token, BATCH_SIZE):
-#     embed_and_store(batch)
-#     time.sleep(1)  # Delay between batches to respect rate limits

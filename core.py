@@ -1,12 +1,18 @@
+import time
+from typing import List
+
 from langchain.chains.combine_documents import create_stuff_documents_chain
-from langchain_community.document_loaders import WebBaseLoader
+from langchain_community.document_loaders import WebBaseLoader, RecursiveUrlLoader
 from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_text_splitters import CharacterTextSplitter, RecursiveCharacterTextSplitter
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
+
+from batch_process import BatchProcess
 from constants import prompts, constants
 from chat import GptLLM
+from dto.website_detail import WebsiteDetails
 from file_process import FileUtils
 from langchain_openai import OpenAIEmbeddings
 from langchain_core.runnables import RunnablePassthrough, RunnableWithMessageHistory
@@ -28,64 +34,86 @@ class Core:
         self.ragchain = None
         self.store = {}
 
-    def extract_documents(self, files):
+    def extract_documents(self, files, website_details_dto: WebsiteDetails):
+        """
+        Function extracts info from documents and the extracted info is saved to vector store.
+        :param files:
+        :param website_details_dto:
+        :return:
+        """
+        # First check file type here. if pdf/ weblink / docs etc.
         for file in files:
-            # extension_name = file.filename.split(".")
             extension_name = file.split(".")
             extension_name = extension_name[len(extension_name) - 1]
             if extension_name == "pdf":
-                return self._extract_pdf_documents(file)
+                extracted_info = self._extract_pdf_documents(file)
+                self._add_texts_to_vectorstore(extracted_info)
             elif extension_name == "docx":
                 pass
 
-    # TODO First check file type here. if pdf/ weblink / docs etc.
+        if len(website_details_dto.websites) != 0:
+            extracted_info = self._extract_website_content(website_details_dto)
+            if len(extracted_info) > 100:
+                self._process_in_batches(docs_token=extracted_info)
+            else:
+                self._add_docs_to_vectorstore(docs_token=extracted_info)
 
-    # Retrieve and generate using the relevant snippets of the blog.
+    def _extract_website_content(self, website_details_dto: WebsiteDetails):
+        for url in website_details_dto.websites:
+            # TODO if all_links enabled, then do RecursiveCharacterTextSplitter.
+            if website_details_dto.is_recursive:
+                loader = RecursiveUrlLoader(url)
+            else:
+                loader = WebBaseLoader(url)
 
-    def _extract_website_content(self, website_urls):
-        for url_info in website_urls:
-            # if all_links enabled, then do RecursiveCharacterTextSplitter.
-            if url_info.get("all_links"):
-                pass
-
-            loader = WebBaseLoader(
-                url_info.get("url"),
-            )
             documents = loader.load()
+
             # TODO check if webbaseloader ever works or not? Otherwise switch to selenium by default.
             if len(documents[0].page_content.strip(" ")) == 0:
                 # TODO We need to use selenium for extraction.
+                # return error that current website cannot be loaded using WebBaseLoader
                 pass
 
             # joined_texts = "\n\n".join(tables)
             docs_token = self.text_splitter.split_documents(documents)
-            if len(docs_token) > 100:
-                # TODO use batching
-                pass
-            else:
-                if self.vectorstore is None:
-                    self.vectorstore = Chroma.from_documents(docs_token, embedding=self.embedder)
-                    return
+            return docs_token
 
-                self.vectorstore.add_documents(docs_token)
-
-    def _extract_pdf_documents(self, file_path):
-        all_texts = []
+    def _extract_pdf_documents(self, file_path) -> List[str]:
+        """
+        PDF docs info are extracted and the text split is returned.
+        :param file_path:
+        :return:
+        """
         # for file_path in documents_file_path:
         raw_pdf_elements = self.file_utils.extract_pdf_elements(file_path)
         texts = self.file_utils.categorize_elements(raw_pdf_elements)
-        # all_texts.append(texts)
 
         joined_texts = "\n".join(texts)
         texts_4k_token = self.text_splitter.split_text(joined_texts)
-
-        self._add_texts_to_vectorstore(texts_4k_token)
+        return texts_4k_token
 
     def _add_texts_to_vectorstore(self, token_text):
+        """
+        Function adds text data to vectorstore.
+        :param token_text:
+        :return:
+        """
         if self.vectorstore is None:
             self.vectorstore = Chroma.from_texts(token_text, embedding=self.embedder, persist_directory="dbstore")
             return
         self.vectorstore.add_texts(texts=token_text)
+
+    def _add_docs_to_vectorstore(self, docs_token):
+        """
+        Function adds documents info to vectorstore
+        :param docs_token:
+        :return:
+        """
+        if self.vectorstore is None:
+            self.vectorstore = Chroma.from_documents(docs_token, embedding=self.embedder)
+            return
+
+        self.vectorstore.add_documents(docs_token)
 
     def _get_retriever(self):
         """
@@ -168,3 +196,24 @@ class Core:
         for chunk in conversational_rag_chain.stream({"input": question},
                                                      config={"configurable": {"session_id": "abc123"}}):
             yield chunk.get('answer', "")
+
+    def embed_and_store(self, docs_batch):
+        """
+        Add documents in chunks to vectorstore.
+        :param docs_batch:
+        :return:
+        """
+        try:
+            self._add_docs_to_vectorstore(docs_token=docs_batch)
+            # embeddings = embedder.embed_documents([doc.page_content for doc in docs_batch])
+            # self.vectorstore.add_documents(docs_batch)
+        except Exception as e:
+            print(f"Error embedding batch: {e}")
+            time.sleep(4)  # Wait before retrying
+            # TODO Check this once.
+            self.embed_and_store(docs_batch)  # Retry
+
+    def _process_in_batches(self, docs_token):
+        for batch in BatchProcess().chunk_documents(docs_token, constants.BATCH_SIZE):
+            self.embed_and_store(batch)
+            time.sleep(1)  # Delay between batches to respect rate limits
