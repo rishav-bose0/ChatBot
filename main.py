@@ -1,11 +1,10 @@
 import shutil
-import tempfile
 import os
 from typing import Optional
 
 import uvicorn
 from fastapi import FastAPI, UploadFile, Request, Form
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
 
 from dto.website_detail import WebsiteDetails
 from service import Service
@@ -45,8 +44,9 @@ def create_upload_file(files: list[UploadFile], websites: Optional[str] = Form(N
     if len(websites.strip(" ")) != 0:
         websites_list = websites.split("\r\n")
     website_details = WebsiteDetails(websites=websites_list, is_recursive=recursive)
+    # asyncio.create_task(service.extract_documents(saved_files, website_details))
     service.extract_documents(saved_files, website_details)
-    # return {"filenames": [file.filename for file in files]}
+    return JSONResponse(content={"status": "Success"})
 
 
 @app.post("/chatwithme/")

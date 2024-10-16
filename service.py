@@ -7,8 +7,14 @@ class Service:
         self.core = Core()
 
     def extract_documents(self, files, website_details_dto: WebsiteDetails):
-        # documents = ["data/tata-motor-report.pdf", "data/mahindra_report.pdf"]
-        # documents = ["data/tata-motor-report.pdf"]
+        """
+        Function sends the files and website urls to the core component where all the processing and extraction takes place.
+        :param files:
+        :param website_details_dto:
+        :return:
+        """
+        # await asyncio.sleep(1)
+        print("Extraction of documents started")
         return self.core.extract_documents(files, website_details_dto)
 
     def chat_with_knowledge_base(self, question):
