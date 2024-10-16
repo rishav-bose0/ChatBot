@@ -1,6 +1,7 @@
 import time
 from typing import List
 
+from bs4 import BeautifulSoup
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_community.document_loaders import WebBaseLoader, RecursiveUrlLoader
 from langchain_community.chat_message_histories import ChatMessageHistory
@@ -53,22 +54,42 @@ class Core:
 
         if len(website_details_dto.websites) != 0:
             extracted_info = self._extract_website_content(website_details_dto)
+            # Threshold of 100. If document list gt 100, store in batches.
             if len(extracted_info) > 100:
                 self._process_in_batches(docs_token=extracted_info)
             else:
                 self._add_docs_to_vectorstore(docs_token=extracted_info)
 
+    def _extract_text_from_html(self, html_content):
+        """
+        Function to parse html content and add only texts.
+        :param html_content:
+        :return:
+        """
+        soup = BeautifulSoup(html_content, 'html.parser')
+
+        # Remove script and style elements
+        for element in soup(['script', 'style']):
+            element.decompose()
+
+        # Get text and clean it
+        text = soup.get_text(separator='\n', strip=True)
+        return text
+
     def _extract_website_content(self, website_details_dto: WebsiteDetails):
+        """
+        Function extracts website contents and returns the documents after splitting.
+        :param website_details_dto:
+        :return:
+        """
         for url in website_details_dto.websites:
-            # TODO if all_links enabled, then do RecursiveCharacterTextSplitter.
             if website_details_dto.is_recursive:
-                loader = RecursiveUrlLoader(url)
+                loader = RecursiveUrlLoader(url, extractor=self._extract_text_from_html)
             else:
                 loader = WebBaseLoader(url)
 
             documents = loader.load()
 
-            # TODO check if webbaseloader ever works or not? Otherwise switch to selenium by default.
             if len(documents[0].page_content.strip(" ")) == 0:
                 # TODO We need to use selenium for extraction.
                 # return error that current website cannot be loaded using WebBaseLoader
@@ -84,7 +105,6 @@ class Core:
         :param file_path:
         :return:
         """
-        # for file_path in documents_file_path:
         raw_pdf_elements = self.file_utils.extract_pdf_elements(file_path)
         texts = self.file_utils.categorize_elements(raw_pdf_elements)
 
@@ -99,6 +119,7 @@ class Core:
         :return:
         """
         if self.vectorstore is None:
+            print("Adding to vector store for the first time")
             self.vectorstore = Chroma.from_texts(token_text, embedding=self.embedder, persist_directory="dbstore")
             return
         self.vectorstore.add_texts(texts=token_text)
@@ -110,7 +131,8 @@ class Core:
         :return:
         """
         if self.vectorstore is None:
-            self.vectorstore = Chroma.from_documents(docs_token, embedding=self.embedder)
+            print("Adding to vector store for the first time")
+            self.vectorstore = Chroma.from_documents(docs_token, embedding=self.embedder, persist_directory="dbstore")
             return
 
         self.vectorstore.add_documents(docs_token)
@@ -123,7 +145,7 @@ class Core:
         if self.vectorstore is None:
             self.vectorstore = Chroma(persist_directory="dbstore", embedding_function=self.embedder)
 
-        retriever = self.vectorstore.as_retriever(search_kwargs={"k": 6})
+        retriever = self.vectorstore.as_retriever(search_kwargs={"k": 20})
         return retriever
 
     def _create_rag_chain(self):
@@ -205,12 +227,9 @@ class Core:
         """
         try:
             self._add_docs_to_vectorstore(docs_token=docs_batch)
-            # embeddings = embedder.embed_documents([doc.page_content for doc in docs_batch])
-            # self.vectorstore.add_documents(docs_batch)
         except Exception as e:
             print(f"Error embedding batch: {e}")
             time.sleep(4)  # Wait before retrying
-            # TODO Check this once.
             self.embed_and_store(docs_batch)  # Retry
 
     def _process_in_batches(self, docs_token):

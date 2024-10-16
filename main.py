@@ -52,7 +52,7 @@ def create_upload_file(files: list[UploadFile], websites: Optional[str] = Form(N
 @app.post("/chatwithme/")
 async def chat(request: Request):
     data = await request.json()
-    user_message = data.get("message", "")
+    user_message = data.get("question", "")
     return StreamingResponse(service.chat_with_knowledge_base(user_message), media_type="text/event-stream")
 
 
