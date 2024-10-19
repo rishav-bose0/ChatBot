@@ -6,19 +6,46 @@
     <title>Upload Data to be Trained for Chat</title>
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@yaireo/tagify/dist/tagify.css">
+    <script src="https://cdn.jsdelivr.net/npm/@yaireo/tagify"></script>
+
+
     <style>
+        body, html {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(90deg, darkblue, pink, darkblue);
+        }
+
         .chat-container {
             display: flex;
             flex-direction: column;
-            height: 60vh;
+            /*height: 60%;*/
             max-width: 800px;
             margin: 20px auto;
             border: 1px solid #ddd;
             border-radius: 8px;
             overflow: hidden;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.9);
             padding: 40px;
         }
+
+        .navbar {
+            background: linear-gradient(90deg, darkblue, pink, darkblue);
+        }
+
+        .chat-container h1 {
+            background: black;
+            font-size: 40px;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .btn-primary{
+            background: darkblue;
+        }
+
     </style>
 </head>
 <body>
@@ -61,8 +88,7 @@
         <!-- Website Links Section -->
         <div class="mb-4">
             <label for="websites" class="form-label">Website Links</label>
-            <textarea class="form-control" id="websites" name="websites" rows="3"
-                      placeholder="Enter website URLs, one per line"></textarea>
+            <input class="form-control" name='websites' id='websites' placeholder='Enter website URLs, press enter to add' autofocus>
             <div class="form-text">Provide one or more website URLs to scrape data from.</div>
         </div>
 
@@ -81,5 +107,9 @@
 
 <!-- Bootstrap JS (Optional, for enhanced interactivity) -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    var input = document.querySelector('#websites');
+    new Tagify(input)
+</script>
 </body>
 </html>
